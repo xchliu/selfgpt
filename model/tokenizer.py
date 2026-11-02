@@ -3,23 +3,23 @@ import os
 
 class Tokenizer:
     """
-    字符级 Tokenizer
+    Character-level Tokenizer
 
-    词表从文件加载，不再硬编码在代码里。
-    vocab.txt 每行一个字符，启动时读取建映射表。
+    Vocab loaded from file, not hardcoded.
+    One char per line in vocab.txt.
     """
 
     def __init__(self, vocab_path=None, text=""):
         """
-        两种初始化方式：
-        1. vocab_path：从文件加载词表（推荐）
-        2. text：从文本构建词表（兼容旧代码）
+        Two init modes:
+        1. vocab_path: load from file
+        2. text: build from text (legacy)
         """
         if vocab_path:
             with open(vocab_path, 'r', encoding='utf-8') as f:
-                # 每行一个字符，去掉换行符本身
+                # one char per line, strip newline
                 chars = [line.rstrip('\n') for line in f]
-            # 换行符无法存在文件的一行里，手动补上
+            # newline cannot be stored as a line, add manually
             if '\n' not in chars:
                 chars.append('\n')
             self.vocab = sorted(chars)
@@ -30,15 +30,15 @@ class Tokenizer:
         self.id_to_char = {i: ch for i, ch in enumerate(self.vocab)}
 
     def encode(self, text):
-        """字符串 → token id 列表"""
+        """string -> token id list"""
         return [self.char_to_id[ch] for ch in text]
 
     def decode(self, tokens):
-        """token id 列表 → 字符串"""
+        """token id list -> string"""
         return ''.join([self.id_to_char[i] for i in tokens])
 
     def save_vocab(self, path):
-        """把词表存成文件，每行一个字符"""
+        """Save vocab to file, one char per line"""
         with open(path, 'w', encoding='utf-8') as f:
             for ch in self.vocab:
                 f.write(ch + '\n')
@@ -49,18 +49,18 @@ class Tokenizer:
 
 
 if __name__ == "__main__":
-    # 从文件加载词表
+    # load vocab from file
     vocab_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'vocab.txt')
     t = Tokenizer(vocab_path=vocab_path)
 
-    print(f"词表大小: {t.vocab_size}")
-    print(f"词表内容: {t.vocab[:20]}... (共 {t.vocab_size} 个)")
+print(f"Vocab size: {t.vocab_size}")
+print(f"Vocab: {t.vocab[:20]}... ({t.vocab_size} total)")
 
-    # 测试 encode/decode
-    text = "你好"
+    # test encode/decode
+    text = "hello"
     tokens = t.encode(text)
     decoded = t.decode(tokens)
-    assert decoded == text, f"encode/decode 不一致: {decoded} != {text}"
-    print(f"encode('{text}') = {tokens}")
-    print(f"decode({tokens}) = '{decoded}'")
-    print("✓ Tokenizer 从文件加载词表跑通")
+assert decoded == text, f"mismatch: {decoded} != {text}"
+print(f"encode(text) = {tokens}")
+print(f'decode({tokens}) = decoded')
+print("OK - Tokenizer works")

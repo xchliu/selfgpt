@@ -1,4 +1,4 @@
-"""简易 Chat 模块 — 多轮对话封装在 generate 之上"""
+"""Chat module — multi-turn dialogue wrapper on top of generate"""
 import os
 import sys
 import torch
@@ -10,15 +10,14 @@ from serve.generate import generate
 
 class ChatSession:
     """
-    多轮对话管理
+    Multi-turn dialogue session
 
-    本质就是把每一轮的 user/assistant 消息拼成一段文本，
-    喂给 generate() 继续生成。模型看到的不是"对话"，
-    是一段连续的文本，格式如下：
+    Builds a text prompt from message history, feeds to generate().
+    The model sees continuous text, not structured dialogue:
 
-      <user>你好</user><assistant>你好，有什么可以帮你的？</assistant><user>今天天气怎么样</user><assistant>
+      <user>hi</user><assistant>hello, how can I help?</assistant><user>how is the weather?</user><assistant>
 
-    然后让模型接着 <assistant> 后面生成，直到遇到 </assistant> 停下。
+    Model generates after <assistant> until </assistant> is reached.
     """
 
     def __init__(self, model, tokenizer, block_size=128, temperature=0.8, top_k=10):
@@ -27,10 +26,10 @@ class ChatSession:
         self.block_size = block_size
         self.temperature = temperature
         self.top_k = top_k
-        self.history = []  # [("user", "你好"), ("assistant", "你好呀"), ...]
+        self.history = []  # [("user", "hi"), ("assistant", "hello"), ...]
 
     def _build_prompt(self):
-        """把对话历史拼成一段文本，末尾留 <assistant> 等模型续写"""
+        """Build prompt text from history, trailing <assistant> for completion"""
         text = ""
         for role, msg in self.history:
             text += f"<{role}>{msg}</{role}>"
@@ -38,19 +37,19 @@ class ChatSession:
         return text
 
     def chat(self, user_input):
-        """发一句话，拿到模型回复"""
-        # 1. 存入用户消息
+        """Send a message, get model reply"""
+        # 1. store user message
         self.history.append(("user", user_input))
 
-        # 2. 拼接历史 → 文本 → token ids
+        # 2. build prompt -> encode -> token ids
         prompt_text = self._build_prompt()
         prompt_ids = self.tokenizer.encode(prompt_text)
 
-        # 3. 超过窗口就截断前面（只留最近的对话）
+        # 3. truncate if exceeds block_size
         if len(prompt_ids) > self.block_size:
             prompt_ids = prompt_ids[-self.block_size:]
 
-        # 4. 生成
+        # 4. generate
         max_new = 100
         result_ids = generate(
             self.model,
@@ -60,26 +59,26 @@ class ChatSession:
             top_k=self.top_k
         )
 
-        # 5. 取新生成的部分，decode 成文本
+        # 5. decode new tokens
         new_ids = result_ids[len(prompt_ids):]
         response = self.tokenizer.decode(new_ids)
 
-        # 6. 遇到 </assistant> 就截断（停止标记）
+        # 6. truncate at stop token
         if "</assistant>" in response:
             response = response.split("</assistant>")[0]
 
-        # 7. 存入助手回复
+        # 7. store assistant reply
         self.history.append(("assistant", response))
         return response
 
     def reset(self):
-        """清空对话历史"""
+        """Clear dialogue history"""
         self.history = []
 
     def show_history(self):
-        """打印完整对话历史"""
+        """Print full dialogue history"""
         for role, msg in self.history:
-            label = "🧑 坦哥" if role == "user" else "🤖 GPT"
+            label = "🧑 You" if role == "user" else "🤖 GPT"
             print(f"{label}: {msg}")
 
 
@@ -87,10 +86,10 @@ class ChatSession:
 from model.bpe_tokenizer import BPETokenizer
 
 class SimpleTokenizer:
-    """使用 BPE 分词器"""
+    """BPE tokenizer wrapper"""
     def __init__(self, encoding="gpt2"):
         self._tk = BPETokenizer(encoding=encoding)
-        self.vocab = None  # BPE 不需要手动维护词表
+        self.vocab = None  # BPE does not need manual vocab
 
     def encode(self, text):
         return self._tk.encode(text)
@@ -103,12 +102,12 @@ class SimpleTokenizer:
         return self._tk.vocab_size
 
 
-# ─── 交互式聊天入口 ──────────────────────────────────────────
+# --- Interactive Chat Entry ---
 if __name__ == '__main__':
-    # 词表从 data/vocab.txt 加载
+    # load vocab from data/vocab.txt
     tokenizer = SimpleTokenizer()
 
-    # 优先加载训练好的模型，没有就用随机初始化
+    # load trained model if available, else random init
     ckpt_path = os.path.join(os.path.dirname(__file__), '..', 'checkpoints', 'model.pt')
     if os.path.exists(ckpt_path):
         ckpt = torch.load(ckpt_path, weights_only=False, map_location='cpu')
@@ -123,7 +122,7 @@ if __name__ == '__main__':
         )
         model.load_state_dict(ckpt['model_state'])
         model.eval()
-        print(f"已加载训练好的模型: {ckpt_path}")
+        print(f"Loaded trained model: {ckpt_path}")
     else:
         model = GPT(
             vocab_size=tokenizer.vocab_size,
@@ -133,24 +132,24 @@ if __name__ == '__main__':
             num_layers=4,
             block_size=128
         )
-        print("未找到 model.pt，使用随机模型（输出乱码）")
+        print("model.pt not found, using random model (output will be gibberish)")
 
     session = ChatSession(model, tokenizer, block_size=128, temperature=0.8, top_k=10)
 
     print("=" * 50)
-    print("  SelfGPT 对话")
-    print("  输入 quit 退出，输入 reset 清空历史")
+    print("  SelfGPT Chat")
+    print("  Type quit to exit, reset to clear history")
     print("=" * 50)
     print()
 
     while True:
-        user_input = input("🧑 你: ").strip()
+        user_input = input("🧑 You: ").strip()
         if user_input == 'quit':
-            print("再见 👋")
+            print("Bye 👋")
             break
         if user_input == 'reset':
             session.reset()
-            print("（对话已清空）\n")
+            print("(history cleared)\n")
             continue
         if not user_input:
             continue

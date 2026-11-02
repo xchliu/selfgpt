@@ -1,4 +1,4 @@
-"""测试 SingleHeadAttention"""
+"""Test SingleHeadAttention"""
 import torch
 import sys
 sys.path.insert(0, '../src')
@@ -10,8 +10,8 @@ def test_single_head():
     x = torch.randn(B, T, C)
     attn = SingleHeadAttention(C, head_size)
     out = attn.forward(x)
-    assert out.shape == (B, T, head_size), f'期望 {(B,T,head_size)}, 实际 {out.shape}'
-    print(f'✓ SingleHead Attention 跑通 — 输入{x.shape} → 输出{out.shape}')
+    assert out.shape == (B, T, head_size), f'expected {(B,T,head_size)}, got {out.shape}'
+    print(f'OK - attention works: {x.shape} -> {out.shape}')
 
 if __name__ == '__main__':
     test_single_head()

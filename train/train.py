@@ -1,15 +1,15 @@
 """
-阶段 5：训练脚本
+Training script
 
-核心循环：
-  1. 从语料切一个 batch 的 (输入, 目标) 对
-  2. 前向传播 → logits
-  3. 算 loss（交叉熵：预测的 vs 真实的下一个 token）
-  4. 反向传播 → 梯度
-  5. optimizer.step() 更新参数
-  6. 重复
+Core loop:
+  1. sample a batch of (input, target) pairs
+  2. forward pass -> logits
+  3. compute cross-entropy loss
+  4. backward pass -> gradients
+  5. optimizer.step() update params
+  6. repeat
 
-训练目标：让模型学会「给定前文，预测下一个 token」
+Goal: predict next token given context
 """
 import os
 import sys
@@ -24,40 +24,40 @@ from model.bpe_tokenizer import BPETokenizer
 from model.gpt import GPT
 
 
-# ─── 数据准备 ───────────────────────────────────────────────
+# --- Data Preparation ---
 
 def load_data(data_path, use_bpe=True):
     """
-    加载训练语料，返回 token id 列表和 tokenizer
+    Load corpus, return token ids and tokenizer
 
-    use_bpe=True: 使用 BPE 分词器（GPT-2 词表，50257 tokens）
-    use_bpe=False: 使用字符级分词器
+    use_bpe=True: BPE tokenizer (GPT-2 vocab)
+    use_bpe=False: char-level tokenizer
     """
     if use_bpe:
         tokenizer = BPETokenizer()
     else:
-        raise NotImplementedError("字符级分词器需要 vocab_path，请使用旧版本")
+        raise NotImplementedError("char-level tokenizer needs vocab_path, use old version")
 
     with open(data_path, 'r', encoding='utf-8') as f:
         text = f.read()
 
     data = torch.tensor(tokenizer.encode(text), dtype=torch.long)
-    print(f"语料长度: {len(text)} 字符 → {len(data)} tokens")
-    print(f"词表大小: {tokenizer.vocab_size}")
+    print(f"Corpus: {len(text)} chars -> {len(data)} tokens")
+    print(f"Vocab: {tokenizer.vocab_size}")
 
     return data, tokenizer
 
 
 def get_batch(data, batch_size, block_size):
     """
-    从语料中随机切一个 batch
+    Sample a random batch from corpus.
 
-    原理：
-      语料: [t0, t1, t2, t3, t4, t5, t6, ...]
-      输入:  [t0, t1, t2, t3]   ← 给模型看的前文
-      目标:  [t1, t2, t3, t4]   ← 模型应该预测的下一个 token（整体偏移一位）
+    Mechanics:
+      corpus: [t0, t1, t2, t3, ...]
+      input:  [t0, t1, t2, t3]   <- context
+      target: [t1, t2, t3, t4]   <- shifted by one
 
-    所以目标和输入是同一段文本，只是错开一位。
+    Target = input shifted by one position.
     """
     ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack([data[i:i + block_size] for i in ix])
@@ -65,54 +65,54 @@ def get_batch(data, batch_size, block_size):
     return x, y
 
 
-# ─── 训练 ───────────────────────────────────────────────────
+# --- Training ---
 
 def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1e-3, eval_interval=10):
     """
-    训练循环
+    Training loop
 
-    epochs: 训练多少轮
-    batch_size: 每次处理几条数据
-    block_size: 每条数据多长（上下文窗口）
-    lr: 学习率（步长，太大跳过最优解，太小学不动）
-    eval_interval: 每多少轮评估一次
+    epochs: iterations
+    batch_size: sequences per batch
+    block_size: context length
+    lr: learning rate
+    eval_interval: eval every N
     """
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
-    # MPS 加速（Apple Silicon）
+    # MPS acceleration (Apple Silicon)
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     model = model.to(device)
     data = data.to(device)
-    print(f"训练设备: {device}")
+    print(f"Device: {device}")
 
     losses = []
 
     for epoch in range(epochs):
-        # ── 1. 取一个 batch ──
+        # 1. sample a batch
         x, y = get_batch(data, batch_size, block_size)
         x, y = x.to(device), y.to(device)
 
-        # ── 2. 前向传播 ──
+        # 2. forward pass
         logits = model(x)  # (B, T, vocab_size)
 
-        # ── 3. 算 loss（交叉熵）──
-        # PyTorch 的 cross_entropy 要 (N, C) 格式，所以展平
+        # 3. compute cross-entropy loss
+        # cross_entropy expects (N, C) format, flatten
         B, T, C = logits.shape
         loss = nn.functional.cross_entropy(
-            logits.view(B * T, C),  # 展平成 (B*T, vocab_size)
-            y.view(B * T)           # 展平成 (B*T,)
+            logits.view(B * T, C),  # flatten to (B*T, vocab_size)
+            y.view(B * T)           # flatten to (B*T,)
         )
 
-        # ── 4. 反向传播 ──
-        optimizer.zero_grad()  # 清掉上一步的梯度
-        loss.backward()        # 自动算每个参数的梯度
+        # 4. backward pass
+        optimizer.zero_grad()  # clear previous gradients
+        loss.backward()        # compute gradients
 
-        # ── 5. 更新参数 ──
+        # 5. update parameters
         optimizer.step()
 
-        # ── 6. 记录 + 定期评估 ──
+        # 6. log + periodic eval
         if epoch % eval_interval == 0 or epoch == epochs - 1:
-            # 在训练集上再跑几批取平均 loss，更稳定
+            # average eval loss over multiple batches
             model.eval()
             eval_losses = []
             with torch.no_grad():
@@ -129,21 +129,21 @@ def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1
             losses.append((epoch, loss.item(), avg_eval))
             model.train()
 
-            print(f"轮次 {epoch:4d}/{epochs} | 训练 loss: {loss.item():.4f} | 评估 loss: {avg_eval:.4f}")
+            print(f"step {epoch:4d}/{epochs} | train loss: {loss.item():.4f} | eval loss: {avg_eval:.4f}")
 
     return losses
 
 
-# ─── 主入口 ─────────────────────────────────────────────────
+# --- Main Entry ---
 
 if __name__ == '__main__':
     base = os.path.dirname(__file__)
     data_path = os.path.join(base, '..', 'data', 'train.txt')
 
-    # 1. 加载数据（使用 BPE 分词器）
+    # 1. load data (BPE tokenizer)
     data, tokenizer = load_data(data_path)
 
-    # 2. 建模型（小模型，适合这台 Mac）
+    # 2. build small model for this Mac
     model = GPT(
         vocab_size=tokenizer.vocab_size,
         embed_dim=64,
@@ -153,18 +153,18 @@ if __name__ == '__main__':
         block_size=64
     )
     params = sum(p.numel() for p in model.parameters())
-    print(f"模型参数量: {params:,}")
+    print(f"Params: {params:,}")
 
-    # 3. 训练
-    print("\n开始训练...\n")
+    # 3. train
+    print("\nTraining...\n")
     start = time.time()
     losses = train(model, data, tokenizer, epochs=200, batch_size=32, block_size=64, lr=1e-3)
     elapsed = time.time() - start
 
-    print(f"\n训练完成，耗时 {elapsed:.1f}s")
-    print(f"初始 loss: {losses[0][1]:.4f} → 最终 loss: {losses[-1][1]:.4f}")
+    print(f"\nDone in {elapsed:.1f}s")
+    print(f"loss: {losses[0][1]:.4f} -> {losses[-1][1]:.4f}")
 
-    # 4. 保存模型
+    # 4. save model
     ckpt_path = os.path.join(base, '..', 'checkpoints', 'model.pt')
     torch.save({
         'model_state': model.state_dict(),
@@ -177,12 +177,12 @@ if __name__ == '__main__':
             'block_size': 64,
         }
     }, ckpt_path)
-    print(f"模型已保存: {ckpt_path}")
+    print(f"Model saved: {ckpt_path}")
 
-    # 5. 试试生成
+    # 5. generate sample
     from serve.generate import generate
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     prompt_ids = tokenizer.encode("To be")
     result = generate(model, prompt_ids, max_new_tokens=50, temperature=0.7, top_k=10)
     text = tokenizer.decode(result)
-    print(f"\n生成示例:\n{text}")
+    print(f"\nSample output:\n{text}")
