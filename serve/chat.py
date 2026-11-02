@@ -87,8 +87,11 @@ from model.tokenizer import Tokenizer as UnifiedTokenizer
 
 class SimpleTokenizer:
     """Unified tokenizer wrapper"""
-    def __init__(self, encoding="cl100k_base"):
-        self._tk = UnifiedTokenizer(encoding)
+    def __init__(self, encoding="cl100k_base", model_path=None):
+        if encoding == "sentencepiece":
+            self._tk = UnifiedTokenizer("sentencepiece", model_path=model_path)
+        else:
+            self._tk = UnifiedTokenizer(encoding)
 
     def encode(self, text):
         return self._tk.encode(text)
@@ -112,7 +115,11 @@ if __name__ == '__main__':
         ckpt = torch.load(ckpt_path, weights_only=False, map_location='cpu')
         cfg = ckpt['config']
         encoding = ckpt.get('encoding', 'gpt2')
-        tokenizer = SimpleTokenizer(encoding=encoding)
+        if encoding == "sentencepiece":
+            sp_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'zhuge-tan-sp.model')
+            tokenizer = SimpleTokenizer(encoding="sentencepiece", model_path=sp_path)
+        else:
+            tokenizer = SimpleTokenizer(encoding=encoding)
         model = GPT(
             vocab_size=tokenizer.vocab_size,
             embed_dim=cfg['embed_dim'],

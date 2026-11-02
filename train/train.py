@@ -30,17 +30,17 @@ from model.gpt import GPT
 # --- Training Config ---
 
 CONFIG = {
-    "data_path": "data/zhuge-tan.txt",
+    "data_path": "data/clean-corpus.txt",
     "embed_dim": 128,
     "num_heads": 4,
     "head_size": 32,
     "num_layers": 6,
     "block_size": 128,
-    "epochs": 1000,
+    "epochs": 3000,
     "batch_size": 32,
     "lr": 1e-3,
     "eval_interval": 10,
-    "encoding": "cl100k_base",  # "char" | "gpt2" | "cl100k_base" | "o200k_base"
+    "encoding": "sentencepiece",  # "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
     "sample_prompts": ["AI时代", "我们", "银行"],
 }
 
@@ -51,11 +51,15 @@ def load_data(data_path, encoding="cl100k_base"):
     """
     Load corpus, return token ids and tokenizer
 
-    encoding: "char" | "gpt2" | "cl100k_base" | "o200k_base"
+    encoding: "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
     """
+    base = os.path.dirname(os.path.dirname(__file__))
     if encoding == "char":
-        vocab_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'vocab.txt')
+        vocab_path = os.path.join(base, 'data', 'vocab.txt')
         tokenizer = Tokenizer("char", vocab_path=vocab_path)
+    elif encoding == "sentencepiece":
+        model_path = os.path.join(base, 'data', 'zhuge-tan-sp.model')
+        tokenizer = Tokenizer("sentencepiece", model_path=model_path)
     else:
         tokenizer = Tokenizer(encoding)
 

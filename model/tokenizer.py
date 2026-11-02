@@ -90,6 +90,25 @@ class TiktokenTokenizer(TokenizerBase):
         return self.enc.n_vocab
 
 
+class SentencePieceTokenizer(TokenizerBase):
+    """SentencePiece BPE tokenizer. Trained on custom corpus."""
+
+    def __init__(self, model_path):
+        import sentencepiece as spm
+        self.sp = spm.SentencePieceProcessor()
+        self.sp.load(model_path)
+
+    def encode(self, text):
+        return self.sp.encode(text)
+
+    def decode(self, tokens):
+        return self.sp.decode(tokens)
+
+    @property
+    def vocab_size(self):
+        return self.sp.vocab_size()
+
+
 # --- Supported backends ---
 _TIKTOKEN_BACKENDS = {"gpt2", "r50k_base", "p50k_base", "cl100k_base", "o200k_base"}
 
@@ -99,8 +118,8 @@ class Tokenizer:
     Unified tokenizer entry point.
 
     Args:
-        backend: "char" | "gpt2" | "cl100k_base" | "o200k_base"
-        **kwargs: passed to backend (e.g. vocab_path for "char")
+        backend: "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
+        **kwargs: passed to backend (e.g. vocab_path for "char", model_path for "sentencepiece")
     """
 
     def __init__(self, backend="cl100k_base", **kwargs):
@@ -108,10 +127,12 @@ class Tokenizer:
             self._impl = CharTokenizer(**kwargs)
         elif backend in _TIKTOKEN_BACKENDS:
             self._impl = TiktokenTokenizer(encoding=backend)
+        elif backend == "sentencepiece":
+            self._impl = SentencePieceTokenizer(**kwargs)
         else:
             raise ValueError(
                 f"Unknown backend: {backend}. "
-                f"Supported: char, {', '.join(_TIKTOKEN_BACKENDS)}"
+                f"Supported: char, sentencepiece, {', '.join(_TIKTOKEN_BACKENDS)}"
             )
         self.backend_name = backend
 
