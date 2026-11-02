@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from gpt import GPT
+from model.gpt import GPT
 
 
 @torch.no_grad()  # 推理不算梯度，省内存

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from attention import SingleHeadAttention
+from model.attention import SingleHeadAttention
 
 
 class FeedForward(nn.Module):

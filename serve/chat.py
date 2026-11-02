@@ -1,10 +1,11 @@
 """简易 Chat 模块 — 多轮对话封装在 generate 之上"""
-import torch
+import os
 import sys
-sys.path.insert(0, '.')
+import torch
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from gpt import GPT
-from generate import generate
+from model.gpt import GPT
+from serve.generate import generate
 
 
 class ChatSession:
@@ -84,7 +85,7 @@ class ChatSession:
 
 # ─── 字符级 Tokenizer（从 vocab.txt 加载）────────────────────
 import os
-from tokenizer import Tokenizer as FileTokenizer
+from model.tokenizer import Tokenizer as FileTokenizer
 
 class SimpleTokenizer:
     """兼容封装：从 data/vocab.txt 加载词表"""
@@ -110,19 +111,37 @@ if __name__ == '__main__':
     # 词表从 data/vocab.txt 加载
     tokenizer = SimpleTokenizer()
 
-    model = GPT(
-        vocab_size=tokenizer.vocab_size,
-        embed_dim=64,
-        num_heads=4,
-        head_size=16,
-        num_layers=4,
-        block_size=128
-    )
+    # 优先加载训练好的模型，没有就用随机初始化
+    ckpt_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'model.pt')
+    if os.path.exists(ckpt_path):
+        ckpt = torch.load(ckpt_path, weights_only=False, map_location='cpu')
+        cfg = ckpt['config']
+        model = GPT(
+            vocab_size=tokenizer.vocab_size,
+            embed_dim=cfg['embed_dim'],
+            num_heads=cfg['num_heads'],
+            head_size=cfg['head_size'],
+            num_layers=cfg['num_layers'],
+            block_size=cfg['block_size']
+        )
+        model.load_state_dict(ckpt['model_state'])
+        model.eval()
+        print(f"已加载训练好的模型: {ckpt_path}")
+    else:
+        model = GPT(
+            vocab_size=tokenizer.vocab_size,
+            embed_dim=64,
+            num_heads=4,
+            head_size=16,
+            num_layers=4,
+            block_size=128
+        )
+        print("未找到 model.pt，使用随机模型（输出乱码）")
 
     session = ChatSession(model, tokenizer, block_size=128, temperature=0.8, top_k=10)
 
     print("=" * 50)
-    print("  手搓 GPT 对话（未训练，纯乱码）")
+    print("  SelfGPT 对话")
     print("  输入 quit 退出，输入 reset 清空历史")
     print("=" * 50)
     print()

@@ -17,10 +17,10 @@ import time
 import torch
 import torch.nn as nn
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from tokenizer import Tokenizer
-from gpt import GPT
+from model.tokenizer import Tokenizer
+from model.gpt import GPT
 
 
 # ─── 数据准备 ───────────────────────────────────────────────

@@ -19,6 +19,9 @@ class Tokenizer:
             with open(vocab_path, 'r', encoding='utf-8') as f:
                 # 每行一个字符，去掉换行符本身
                 chars = [line.rstrip('\n') for line in f]
+            # 换行符无法存在文件的一行里，手动补上
+            if '\n' not in chars:
+                chars.append('\n')
             self.vocab = sorted(chars)
         else:
             self.vocab = sorted(list(set(text)))

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from block import TransformerBlock
+from model.block import TransformerBlock
 
 
 class GPT(nn.Module):

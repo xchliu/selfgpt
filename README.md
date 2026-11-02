@@ -40,7 +40,7 @@ cd selfgpt
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python src/train.py
+python train/train.py
 ```
 
 训练完会自动生成一段文本，并保存模型到 `data/model.pt`。
@@ -48,26 +48,29 @@ python src/train.py
 ## 交互式对话
 
 ```bash
-cd src
-python chat.py
+python serve/chat.py
 ```
 
 ## 项目结构
 
 ```
 selfgpt/
-├── MANUAL.md           # 完整操作手册（6 阶段路线图 + 原理 + 踩坑）
-├── src/                # 源代码
+├── MANUAL.md           # 完整操作手册
+├── README.md           # 项目简介
+├── requirements.txt     # 依赖：torch + numpy
+├── model/              # 模型定义（训练推理共用）
 │   ├── tokenizer.py    # 字符级 tokenizer
-│   ├── attention.py    # SingleHeadAttention（QKV + mask + proj）
-│   ├── block.py        # TransformerBlock（FF + LayerNorm + 残差）
-│   ├── gpt.py          # 完整 GPT（Embedding + Position + N×Block + LM Head）
-│   ├── train.py        # 训练循环
-│   ├── generate.py     # 自回归生成（temperature + top_k）
-│   └── chat.py         # 多轮对话封装
+│   ├── attention.py    # SingleHeadAttention
+│   ├── block.py        # TransformerBlock
+│   └── gpt.py          # 完整 GPT
+├── train/              # 训练（推理时不需要）
+│   └── train.py        # 训练循环
+├── serve/              # 推理（训练时不需要）
+│   ├── generate.py     # 自回归生成
+│   └── chat.py         # 多轮对话
 ├── tests/              # 测试
 ├── data/               # 词表 + 语料 + 模型
-└── ref/                # 参考资料
+└── ref/                 # 参考资料
 ```
 
 ## 你能学到什么
