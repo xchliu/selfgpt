@@ -83,17 +83,14 @@ class ChatSession:
             print(f"{label}: {msg}")
 
 
-# ─── 字符级 Tokenizer（从 vocab.txt 加载）────────────────────
-import os
-from model.tokenizer import Tokenizer as FileTokenizer
+# ─── BPE Tokenizer ────────────────────────────────────────
+from model.bpe_tokenizer import BPETokenizer
 
 class SimpleTokenizer:
-    """兼容封装：从 data/vocab.txt 加载词表"""
-    def __init__(self, vocab_path=None):
-        if vocab_path is None:
-            vocab_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'vocab.txt')
-        self._tk = FileTokenizer(vocab_path=vocab_path)
-        self.vocab = self._tk.vocab
+    """使用 BPE 分词器"""
+    def __init__(self, encoding="gpt2"):
+        self._tk = BPETokenizer(encoding=encoding)
+        self.vocab = None  # BPE 不需要手动维护词表
 
     def encode(self, text):
         return self._tk.encode(text)
@@ -112,7 +109,7 @@ if __name__ == '__main__':
     tokenizer = SimpleTokenizer()
 
     # 优先加载训练好的模型，没有就用随机初始化
-    ckpt_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'model.pt')
+    ckpt_path = os.path.join(os.path.dirname(__file__), '..', 'checkpoints', 'model.pt')
     if os.path.exists(ckpt_path):
         ckpt = torch.load(ckpt_path, weights_only=False, map_location='cpu')
         cfg = ckpt['config']

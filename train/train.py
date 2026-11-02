@@ -20,30 +20,26 @@ import torch.nn as nn
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from model.tokenizer import Tokenizer
+from model.bpe_tokenizer import BPETokenizer
 from model.gpt import GPT
 
 
 # ─── 数据准备 ───────────────────────────────────────────────
 
-def load_data(data_path, vocab_path):
+def load_data(data_path, use_bpe=True):
     """
-    加载训练语料和词表，返回 token id 列表和 tokenizer
+    加载训练语料，返回 token id 列表和 tokenizer
+
+    use_bpe=True: 使用 BPE 分词器（GPT-2 词表，50257 tokens）
+    use_bpe=False: 使用字符级分词器
     """
-    tokenizer = Tokenizer(vocab_path=vocab_path)
+    if use_bpe:
+        tokenizer = BPETokenizer()
+    else:
+        raise NotImplementedError("字符级分词器需要 vocab_path，请使用旧版本")
 
     with open(data_path, 'r', encoding='utf-8') as f:
         text = f.read()
-
-    # 检查语料中的字符是否都在词表里
-    missing = set(text) - set(tokenizer.char_to_id.keys())
-    if missing:
-        # 把缺失字符补进词表
-        print(f"词表缺少 {len(missing)} 个字符，自动补充: {missing}")
-        new_chars = sorted(list(missing))
-        tokenizer.vocab.extend(new_chars)
-        for ch in new_chars:
-            tokenizer.char_to_id[ch] = len(tokenizer.char_to_id)
-            tokenizer.id_to_char[len(tokenizer.id_to_char)] = ch
 
     data = torch.tensor(tokenizer.encode(text), dtype=torch.long)
     print(f"语料长度: {len(text)} 字符 → {len(data)} tokens")
@@ -143,10 +139,9 @@ def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1
 if __name__ == '__main__':
     base = os.path.dirname(__file__)
     data_path = os.path.join(base, '..', 'data', 'train.txt')
-    vocab_path = os.path.join(base, '..', 'data', 'vocab.txt')
 
-    # 1. 加载数据
-    data, tokenizer = load_data(data_path, vocab_path)
+    # 1. 加载数据（使用 BPE 分词器）
+    data, tokenizer = load_data(data_path)
 
     # 2. 建模型（小模型，适合这台 Mac）
     model = GPT(
@@ -170,10 +165,10 @@ if __name__ == '__main__':
     print(f"初始 loss: {losses[0][1]:.4f} → 最终 loss: {losses[-1][1]:.4f}")
 
     # 4. 保存模型
-    ckpt_path = os.path.join(base, '..', 'data', 'model.pt')
+    ckpt_path = os.path.join(base, '..', 'checkpoints', 'model.pt')
     torch.save({
         'model_state': model.state_dict(),
-        'vocab': tokenizer.vocab,
+        'encoding': 'gpt2',
         'config': {
             'embed_dim': 64,
             'num_heads': 4,
@@ -185,7 +180,7 @@ if __name__ == '__main__':
     print(f"模型已保存: {ckpt_path}")
 
     # 5. 试试生成
-    from generate import generate
+    from serve.generate import generate
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     prompt_ids = tokenizer.encode("To be")
     result = generate(model, prompt_ids, max_new_tokens=50, temperature=0.7, top_k=10)
