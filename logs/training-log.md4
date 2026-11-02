@@ -1,0 +1,66 @@
+## Run 4 — 2026-11-02 15:48
+
+**Goal**: N/A
+
+### Config
+| Parameter | Value |
+|-----------|-------|
+| Tokenizer | BPE tiktoken GPT-2 (vocab=50,257) |
+| Corpus | data/zhuge-tan.txt (393,436 chars → 379,549 tokens) |
+| embed_dim | 128 |
+| num_layers | 6 |
+| num_heads | 4 |
+| head_size | 32 |
+| block_size | 128 |
+| epochs | 1000 |
+| batch_size | 32 |
+| lr | 0.001 |
+| optimizer | AdamW |
+| device | mps |
+
+### Results
+- Params: 26,679,477
+- Time: 482.0s
+- Initial loss: 11.6702
+- Final loss: 3.5505
+- Eval loss: 3.4451
+
+### Loss Curve (sampled)
+```
+step     0: train=11.6702  eval=11.5241
+step   100: train=5.6302  eval=5.7387
+step   200: train=4.8206  eval=4.6868
+step   300: train=4.3826  eval=4.3183
+step   400: train=4.3311  eval=4.1741
+step   500: train=4.0907  eval=4.0066
+step   600: train=3.8528  eval=3.9424
+step   700: train=3.9028  eval=3.8222
+step   800: train=3.6506  eval=3.7008
+step   900: train=3.4541  eval=3.5699
+step   999: train=3.5505  eval=3.4451
+```
+
+### Sample Outputs
+```
+Prompt: AI时代
+AI时代，但AI不是你的能力、你让AI把所有记忆，但你的记忆变得"。你有没有，你的记忆"。但你让你知道什么？"记忆"，你的记忆，它记忆。你的记忆是记忆
+
+Prompt: 我们
+我们怎么样。
+
+**第三件事：** 你写代码（用例） | P1 |
+| 2 | 看�发票 | **AI的"AI时代"，什么"到底是AI的核心的人/什么？ | 10章 | ① | 0% |
+| 2 |
+
+Prompt: 银行
+银行AI的人数学会越来越来越好的，是我觉得AI做的事的，是因为它的是因为它的信息差异。但它们的是因为它只是"记忆"。它"，不知道。
+
+这些记忆的记�
+```
+
+### Analysis
+- Train/eval gap: 0.1054 (possible overfitting)
+- Loss change: 11.67 -> 3.55 (delta=8.12)
+
+---
+

@@ -82,14 +82,13 @@ class ChatSession:
             print(f"{label}: {msg}")
 
 
-# ─── BPE Tokenizer ────────────────────────────────────────
-from model.bpe_tokenizer import BPETokenizer
+# --- Tokenizer ---
+from model.tokenizer import Tokenizer as UnifiedTokenizer
 
 class SimpleTokenizer:
-    """BPE tokenizer wrapper"""
-    def __init__(self, encoding="gpt2"):
-        self._tk = BPETokenizer(encoding=encoding)
-        self.vocab = None  # BPE does not need manual vocab
+    """Unified tokenizer wrapper"""
+    def __init__(self, encoding="cl100k_base"):
+        self._tk = UnifiedTokenizer(encoding)
 
     def encode(self, text):
         return self._tk.encode(text)
@@ -112,6 +111,8 @@ if __name__ == '__main__':
     if os.path.exists(ckpt_path):
         ckpt = torch.load(ckpt_path, weights_only=False, map_location='cpu')
         cfg = ckpt['config']
+        encoding = ckpt.get('encoding', 'gpt2')
+        tokenizer = SimpleTokenizer(encoding=encoding)
         model = GPT(
             vocab_size=tokenizer.vocab_size,
             embed_dim=cfg['embed_dim'],
@@ -155,4 +156,4 @@ if __name__ == '__main__':
             continue
 
         response = session.chat(user_input)
-        print(f"🤖 GPT: {response}\n")
+        print(f"🤖 SelfGPT: {response}\n")
