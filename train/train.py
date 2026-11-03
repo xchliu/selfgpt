@@ -32,10 +32,10 @@ from model.gpt import GPT
 CONFIG = {
     "type": "pretrain",
     "data_path": "data/mixed-corpus.txt",
-    "embed_dim": 128,
+    "embed_dim": 512,
     "num_heads": 4,
-    "head_size": 32,
-    "num_layers": 6,
+    "head_size": 64,
+    "num_layers": 12,
     "block_size": 128,
     "epochs": 10000,
     "batch_size": 32,
