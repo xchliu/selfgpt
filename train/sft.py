@@ -34,10 +34,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from model.tokenizer import Tokenizer
 from model.gpt import GPT
 
+# import logging functions
+from train.log_utils import get_run_number, write_log
+
 
 # --- SFT Config ---
 
 SFT_CONFIG = {
+    "type": "sft",
     "sft_data": "data/sft/sft-auto.json",
     "sp_model": "data/zhuge-tan-sp.model",
     "embed_dim": 128,
@@ -49,6 +53,8 @@ SFT_CONFIG = {
     "batch_size": 4,
     "lr": 5e-4,
     "eval_interval": 50,
+    "encoding": "sentencepiece",
+    "vocab_size": 16000,
 }
 
 
@@ -309,6 +315,7 @@ if __name__ == '__main__':
     ]
 
     print("\n=== SFT Test ===\n")
+    samples_text = ""
     for question in test_prompts:
         prompt_text = f"<user>{question}</user><assistant>"
         prompt_ids = tokenizer.encode(prompt_text)
@@ -322,5 +329,41 @@ if __name__ == '__main__':
         else:
             response = text
 
+        response = response.strip()
         print(f"Q: {question}")
-        print(f"A: {response.strip()}\n")
+        print(f"A: {response}\n")
+        samples_text += f"Q: {question}\nA: {response}\n\n"
+
+    # 7. auto-write training log
+    loss_curve_lines = []
+    step = max(1, len(losses) // 10)
+    for i in range(0, len(losses), step):
+        ep, tl = losses[i]
+        loss_curve_lines.append(f"step {ep:5d}: sft_loss={tl:.4f}")
+    if losses:
+        ep, tl = losses[-1]
+        last_line = f"step {ep:5d}: sft_loss={tl:.4f}"
+        if last_line not in loss_curve_lines:
+            loss_curve_lines.append(last_line)
+
+    log_path = os.path.join(base, 'logs', 'training-log.md')
+    sft_config_for_log = {
+        **SFT_CONFIG,
+        'data_path': SFT_CONFIG['sft_data'],
+        'goal': 'SFT: learn dialogue format',
+    }
+    results = {
+        'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'device': 'mps' if torch.backends.mps.is_available() else 'cpu',
+        'corpus_chars': sum(len(ids) for ids, _ in samples),
+        'corpus_tokens': sum(len(ids) for ids, _ in samples),
+        'params': params,
+        'elapsed': elapsed,
+        'initial_loss': losses[0][1],
+        'final_loss': losses[-1][1],
+        'final_eval_loss': losses[-1][1],  # SFT doesn't have separate eval
+        'loss_curve': '\n'.join(loss_curve_lines),
+    }
+
+    run_num = get_run_number(log_path)
+    write_log(log_path, run_num, sft_config_for_log, results, samples_text.strip())

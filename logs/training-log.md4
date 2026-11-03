@@ -304,3 +304,56 @@ Prompt: 银行
 
 ---
 
+## Run 4 — 2026-11-03 15:04
+
+**Goal**: SFT: learn dialogue format
+
+### Config
+| Parameter | Value |
+|-----------|-------|
+| Tokenizer | gpt2 |
+| Corpus | data/sft/sft-auto.json (28,347 chars → 28,347 tokens) |
+| embed_dim | 128 |
+| num_layers | 6 |
+| num_heads | 4 |
+| head_size | 32 |
+| block_size | 128 |
+| epochs | 150 |
+| batch_size | 4 |
+| lr | 0.0005 |
+| optimizer | AdamW |
+| device | mps |
+
+### Results
+- Params: 5,020,288
+- Time: 5.8s
+- Initial loss: 4.3056
+- Final loss: 1.4870
+- Eval loss: 1.4870
+
+### Loss Curve (sampled)
+```
+step     0: sft_loss=4.3056
+step    50: sft_loss=1.9575
+step   100: sft_loss=1.7452
+step   149: sft_loss=1.4870
+```
+
+### Sample Outputs
+```
+Q: 什么是大模型？
+A: 在直接摆五很简单: c,AI时代正在被重新定义,信贷审批靠的是饭。 销售A组:业绩同比增长12%,全员发不到串。 销售A组:业绩同比增长8%从200毫秒,也不错。 两个小组**用户聊变得今年100/B测试里。懂业务痛点会在调用我过去超过 三件事,国内大模型将同步、设计、风控建模、运营,国内开发者口碑,国内就能更新到多头在进步。对银行业而言,他开始优化的十倍
+
+Q: 银行怎么落地AI？
+A: 让每个AI都能做AI工具,信贷审批流程里早就凉了。 但中国也有这样的: 银行信贷审批流程里,“AI终审+人工兜底”模式的试点数量。 这个数,对方听着重要。三年不动,现在还会不会长这样的晨会任务:别急着收藏。 推广的第一个月,气氛很好。代码提交量涨了三倍,团队日报里到处是"AI帮我生成了XX"的捷报。有人甚至说,以前一天写500元个人,现在根本没定流程。 直到季度代码审计。
+
+Q: AI能替代程序员吗？
+A: 现在招AI落地AI。 差距和团队,以后展开上次一个AI帮你发什么文案好,我让那个同事周五下午来找我。行长要看。" 他说了一句话"行长要看"这种可下半年前的"的概念。AI呢?AI把领导段的不是聊天,"怎么说话"。但核心技能树味、无限宇宙论断。 所以关系链台机器在哪,它们只知道——上下文,事实是主动调用链——它是哪个科的记忆。 也许当AI的、它"思维下来
+```
+
+### Analysis
+- Train/eval gap: 0.0000 (no overfitting)
+- Loss change: 4.31 -> 1.49 (delta=2.82)
+
+---
+

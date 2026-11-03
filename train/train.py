@@ -30,6 +30,7 @@ from model.gpt import GPT
 # --- Training Config ---
 
 CONFIG = {
+    "type": "pretrain",
     "data_path": "data/clean-corpus.txt",
     "embed_dim": 128,
     "num_heads": 4,
@@ -41,6 +42,7 @@ CONFIG = {
     "lr": 1e-3,
     "eval_interval": 10,
     "encoding": "sentencepiece",  # "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
+    "vocab_size": 16000,
     "sample_prompts": ["AI时代", "我们", "银行"],
 }
 
@@ -161,69 +163,7 @@ def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1
 
 # --- Logging ---
 
-def get_run_number(log_path):
-    """Read existing log, return next run number"""
-    if not os.path.exists(log_path):
-        return 1
-    with open(log_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    count = content.count('## Run ')
-    return count + 1
-
-
-def write_log(log_path, run_num, config, results, samples):
-    """Append a run entry to the training log"""
-    header = ""
-    if run_num == 1:
-        header = "# SelfGPT Training Log\n\nEach run auto-logged: config, results, sample outputs.\n\n---\n\n"
-
-    entry = header + f"""## Run {run_num} — {results['date']}
-
-**Goal**: {config.get('goal', 'N/A')}
-
-### Config
-| Parameter | Value |
-|-----------|-------|
-| Tokenizer | BPE tiktoken GPT-2 (vocab=50,257) |
-| Corpus | {config['data_path']} ({results['corpus_chars']:,} chars → {results['corpus_tokens']:,} tokens) |
-| embed_dim | {config['embed_dim']} |
-| num_layers | {config['num_layers']} |
-| num_heads | {config['num_heads']} |
-| head_size | {config['head_size']} |
-| block_size | {config['block_size']} |
-| epochs | {config['epochs']} |
-| batch_size | {config['batch_size']} |
-| lr | {config['lr']} |
-| optimizer | AdamW |
-| device | {results['device']} |
-
-### Results
-- Params: {results['params']:,}
-- Time: {results['elapsed']:.1f}s
-- Initial loss: {results['initial_loss']:.4f}
-- Final loss: {results['final_loss']:.4f}
-- Eval loss: {results['final_eval_loss']:.4f}
-
-### Loss Curve (sampled)
-```
-{results['loss_curve']}
-```
-
-### Sample Outputs
-```
-{samples}
-```
-
-### Analysis
-- Train/eval gap: {results['final_loss'] - results['final_eval_loss']:.4f} ({'no overfitting' if abs(results['final_loss'] - results['final_eval_loss']) < 0.1 else 'possible overfitting'})
-- Loss change: {results['initial_loss']:.2f} -> {results['final_loss']:.2f} (delta={results['initial_loss'] - results['final_loss']:.2f})
-
----
-
-"""
-    with open(log_path+str(run_num), 'a', encoding='utf-8') as f:
-        f.write(entry)
-    print(f"Log written: {log_path} (Run {run_num})")
+from train.log_utils import get_run_number, write_log
 
 
 # --- Main Entry ---
