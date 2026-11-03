@@ -31,18 +31,19 @@ from model.gpt import GPT
 
 CONFIG = {
     "type": "pretrain",
-    "data_path": "data/clean-corpus.txt",
+    "data_path": "data/mixed-corpus.txt",
     "embed_dim": 128,
     "num_heads": 4,
     "head_size": 32,
     "num_layers": 6,
     "block_size": 128,
-    "epochs": 3000,
+    "epochs": 10000,
     "batch_size": 32,
     "lr": 1e-3,
     "eval_interval": 10,
     "encoding": "sentencepiece",  # "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
     "vocab_size": 16000,
+    "sp_model_path": "data/mixed-sp.model",
     "sample_prompts": ["AI时代", "我们", "银行"],
 }
 
@@ -60,7 +61,7 @@ def load_data(data_path, encoding="cl100k_base"):
         vocab_path = os.path.join(base, 'data', 'vocab.txt')
         tokenizer = Tokenizer("char", vocab_path=vocab_path)
     elif encoding == "sentencepiece":
-        model_path = os.path.join(base, 'data', 'zhuge-tan-sp.model')
+        model_path = os.path.join(base, CONFIG.get('sp_model_path', 'data/zhuge-tan-sp.model'))
         tokenizer = Tokenizer("sentencepiece", model_path=model_path)
     else:
         tokenizer = Tokenizer(encoding)
@@ -94,7 +95,7 @@ def get_batch(data, batch_size, block_size):
 
 # --- Training ---
 
-def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1e-3, eval_interval=10):
+def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1e-3, eval_interval=10, detail_path=None):
     """
     Training loop
 
@@ -103,6 +104,7 @@ def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1
     block_size: context length
     lr: learning rate
     eval_interval: eval every N
+    detail_path: path to detail log file for progress updates
     """
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
@@ -113,6 +115,7 @@ def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1
     print(f"Device: {device}")
 
     losses = []
+    start_time = time.time()
 
     for epoch in range(epochs):
         # 1. sample a batch
@@ -158,12 +161,17 @@ def train(model, data, tokenizer, epochs=100, batch_size=32, block_size=64, lr=1
 
             print(f"step {epoch:4d}/{epochs} | train loss: {loss.item():.4f} | eval loss: {avg_eval:.4f}")
 
+            # update progress in detail log
+            if detail_path:
+                elapsed_now = time.time() - start_time
+                update_progress(detail_path, epoch, epochs, loss.item(), avg_eval, elapsed_now)
+
     return losses
 
 
 # --- Logging ---
 
-from train.log_utils import get_run_number, write_log
+from train.log_utils import get_run_number, start_log, update_progress, finish_log
 
 
 # --- Main Entry ---
@@ -191,7 +199,23 @@ if __name__ == '__main__':
     params = sum(p.numel() for p in model.parameters())
     print(f"Params: {params:,}")
 
-    # 3. train
+    # 3. phase 1: start log
+    device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+    run_num = get_run_number(log_path)
+    init_results = {
+        'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'device': device,
+        'corpus_chars': corpus_chars,
+        'corpus_tokens': corpus_tokens,
+        'params': params,
+        'elapsed': 0,
+        'initial_loss': 0,
+        'final_loss': 0,
+        'final_eval_loss': 0,
+    }
+    detail_path = start_log(log_path, run_num, CONFIG, init_results)
+
+    # 4. train (phase 2: progress updates inside train())
     print("\nTraining...\n")
     start = time.time()
     losses = train(model, data, tokenizer,
@@ -199,13 +223,14 @@ if __name__ == '__main__':
                    batch_size=CONFIG['batch_size'],
                    block_size=CONFIG['block_size'],
                    lr=CONFIG['lr'],
-                   eval_interval=CONFIG['eval_interval'])
+                   eval_interval=CONFIG['eval_interval'],
+                   detail_path=detail_path)
     elapsed = time.time() - start
 
     print(f"\nDone in {elapsed:.1f}s")
     print(f"loss: {losses[0][1]:.4f} -> {losses[-1][1]:.4f}")
 
-    # 4. save model
+    # 5. save model
     ckpt_path = os.path.join(base, 'checkpoints', 'model.pt')
     os.makedirs(os.path.join(base, 'checkpoints'), exist_ok=True)
     torch.save({
@@ -221,9 +246,8 @@ if __name__ == '__main__':
     }, ckpt_path)
     print(f"Model saved: {ckpt_path}")
 
-    # 5. generate samples
+    # 6. generate samples
     from serve.generate import generate
-    device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     samples_text = ""
     for prompt in CONFIG['sample_prompts']:
         prompt_ids = tokenizer.encode(prompt)
@@ -232,22 +256,20 @@ if __name__ == '__main__':
         samples_text += f"Prompt: {prompt}\n{text}\n\n"
         print(f"\n--- Prompt: {prompt} ---\n{text}\n")
 
-    # 6. auto-write training log
-    # build loss curve string (sample every ~10% of eval points)
+    # 7. phase 3: finish log
     loss_curve_lines = []
     step = max(1, len(losses) // 10)
     for i in range(0, len(losses), step):
         ep, tl, el = losses[i]
         loss_curve_lines.append(f"step {ep:5d}: train={tl:.4f}  eval={el:.4f}")
-    # always include last
     if len(losses) > 0:
         ep, tl, el = losses[-1]
         last_line = f"step {ep:5d}: train={tl:.4f}  eval={el:.4f}"
         if last_line not in loss_curve_lines:
             loss_curve_lines.append(last_line)
 
-    results = {
-        'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+    final_results = {
+        'date': init_results['date'],
         'device': device,
         'corpus_chars': corpus_chars,
         'corpus_tokens': corpus_tokens,
@@ -259,5 +281,4 @@ if __name__ == '__main__':
         'loss_curve': '\n'.join(loss_curve_lines),
     }
 
-    run_num = get_run_number(log_path)
-    write_log(log_path, run_num, CONFIG, results, samples_text.strip())
+    finish_log(log_path, run_num, CONFIG, final_results, samples_text.strip(), detail_path)

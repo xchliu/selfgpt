@@ -1,9 +1,10 @@
 """
 Shared training log utilities.
 
-Two-layer logging:
-  1. logs/training-log.md    — master ledger (one-line summary per run)
-  2. logs/runs/run-NNN-*.md  — detailed log per run
+Three-phase logging:
+  1. start_log()    — called at training start: ledger row (running) + detail log header
+  2. update_progress() — called during training: update detail log with latest step
+  3. finish_log()   — called at training end: update ledger (final results) + detail log (analysis + samples)
 
 Both pretrain and SFT use these.
 """
@@ -17,40 +18,58 @@ def get_run_number(log_path):
         return 1
     with open(log_path, 'r', encoding='utf-8') as f:
         content = f.read()
-    count = content.count('| Run ')
+    count = 0
+    for line in content.split('\n'):
+        line = line.strip()
+        if line.startswith('| ') and not line.startswith('| Run') and not line.startswith('|---'):
+            parts = line.split('|')
+            if len(parts) > 1:
+                first_cell = parts[1].strip()
+                if first_cell.isdigit():
+                    count += 1
     return count + 1
 
 
-def write_ledger_entry(log_path, run_num, config, results):
-    """Append one-line summary to master ledger"""
-    header = ""
-    if run_num == 1:
-        header = """# SelfGPT Training Ledger
+def _ledger_header():
+    return """# SelfGPT Training Ledger
 
-| Run | Date | Type | Tokenizer | Vocab | Corpus | Params | Epochs | Time | Init Loss | Final Loss | Notes |
-|-----|------|------|-----------|-------|--------|--------|--------|------|-----------|------------|-------|
+| Run | Date | Type | Tokenizer | Vocab | Corpus | Params | Epochs | Time | Init Loss | Final Loss | Status |
+|-----|------|------|-----------|-------|--------|--------|--------|------|-----------|------------|--------|
 """
 
-    entry = f"""| {run_num} | {results['date']} | {config.get('type', 'pretrain')} | {config.get('encoding', 'gpt2')} | {config.get('vocab_size', '?')} | {results['corpus_chars']:,} | {results['params']:,} | {config.get('epochs', '?')} | {results['elapsed']:.0f}s | {results['initial_loss']:.2f} | {results['final_loss']:.2f} | {config.get('notes', '')} |
-"""
 
-    with open(log_path, 'a', encoding='utf-8') as f:
-        f.write(header + entry)
-    print(f"Ledger updated: {log_path} (Run {run_num})")
+def _ledger_row(run_num, config, results, status):
+    date = results.get('date', datetime.now().strftime('%Y-%m-%d %H:%M'))
+    init_loss = results.get('initial_loss', 0)
+    final_loss = results.get('final_loss', 0)
+    elapsed = results.get('elapsed', 0)
+    corpus = results.get('corpus_chars', 0)
+    params = results.get('params', 0)
+    return f"| {run_num} | {date} | {config.get('type', 'pretrain')} | {config.get('encoding', 'gpt2')} | {config.get('vocab_size', '?')} | {corpus:,} | {params:,} | {config.get('epochs', '?')} | {elapsed:.0f}s | {init_loss:.2f} | {final_loss:.2f} | {status} |\n"
 
 
-def write_detail_log(runs_dir, run_num, config, results, samples):
-    """Write detailed log for a single run"""
+def start_log(log_path, run_num, config, results):
+    """Phase 1: Called at training start.
+    Writes ledger row with status=running, and detail log header.
+    """
+    runs_dir = os.path.join(os.path.dirname(log_path), 'runs')
     os.makedirs(runs_dir, exist_ok=True)
 
-    run_type = config.get('type', 'pretrain')
-    filename = f"run-{run_num:03d}-{run_type}.md"
-    filepath = os.path.join(runs_dir, filename)
+    # 1. Ledger: add row with running status
+    header = _ledger_header() if run_num == 1 else ""
+    row = _ledger_row(run_num, config, results, "running")
+    with open(log_path, 'a', encoding='utf-8') as f:
+        f.write(header + row)
+    print(f"Ledger: Run {run_num} started")
 
-    entry = f"""# Run {run_num:03d} — {run_type}
+    # 2. Detail log: header with config
+    run_type = config.get('type', 'pretrain')
+    detail_path = os.path.join(runs_dir, f"run-{run_num:03d}-{run_type}.md")
+    detail = f"""# Run {run_num:03d} — {run_type}
 
 **Date**: {results['date']}
 **Goal**: {config.get('goal', 'N/A')}
+**Status**: running
 
 ## Config
 
@@ -72,7 +91,84 @@ def write_detail_log(runs_dir, run_num, config, results, samples):
 | optimizer | AdamW |
 | device | {results['device']} |
 
-## Results
+## Progress
+
+```
+training...
+```
+"""
+    with open(detail_path, 'w', encoding='utf-8') as f:
+        f.write(detail)
+    print(f"Detail log: {detail_path}")
+
+    return detail_path
+
+
+def update_progress(detail_path, epoch, total_epochs, train_loss, eval_loss, elapsed):
+    """Phase 2: Called during training. Updates the Progress section in detail log."""
+    if not os.path.exists(detail_path):
+        return
+
+    with open(detail_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    pct = (epoch + 1) / total_epochs * 100
+    progress_line = f"step {epoch+1}/{total_epochs} ({pct:.1f}%) | train: {train_loss:.4f} | eval: {eval_loss:.4f} | {elapsed:.0f}s"
+
+    # Replace the Progress section content
+    # Find "## Progress" section and update it
+    import re
+    pattern = r'(## Progress\n\n```\n)(.*?)(\n```)'
+    replacement = rf'\1{progress_line}\n\3'
+    new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+    if new_content == content:
+        # Pattern not found, append
+        new_content = content + f"\n{progress_line}\n"
+
+    with open(detail_path, 'w', encoding='utf-8') as f:
+        f.write(new_content)
+
+
+def finish_log(log_path, run_num, config, results, samples, detail_path=None):
+    """Phase 3: Called at training end.
+    Updates ledger row with final results, and detail log with analysis + samples.
+    """
+    runs_dir = os.path.join(os.path.dirname(log_path), 'runs')
+
+    # 1. Update ledger: replace the running row with final results
+    with open(log_path, 'r', encoding='utf-8') as f:
+        ledger = f.read()
+
+    # Find the row for this run_num and replace it
+    old_row_pattern = f"| {run_num} |"
+    lines = ledger.split('\n')
+    new_lines = []
+    for line in lines:
+        if line.strip().startswith(old_row_pattern) and 'running' in line:
+            # Replace with final row
+            new_lines.append(_ledger_row(run_num, config, results, "done").strip())
+        else:
+            new_lines.append(line)
+
+    with open(log_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(new_lines))
+    print(f"Ledger: Run {run_num} done (loss {results['final_loss']:.2f})")
+
+    # 2. Update detail log with results, analysis, samples
+    if detail_path is None:
+        run_type = config.get('type', 'pretrain')
+        detail_path = os.path.join(runs_dir, f"run-{run_num:03d}-{run_type}.md")
+
+    with open(detail_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Replace status
+    content = content.replace("**Status**: running", "**Status**: done")
+
+    # Replace progress with final loss curve
+    import re
+    final_section = f"""## Results
 
 - Params: {results['params']:,}
 - Time: {results['elapsed']:.1f}s
@@ -95,19 +191,14 @@ def write_detail_log(runs_dir, run_num, config, results, samples):
 ```
 """
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(entry)
-    print(f"Detail log: {filepath}")
+    # Replace everything from "## Results" onwards (or from "## Progress" if no Results yet)
+    if '## Results' in content:
+        content = content[:content.index('## Results')] + final_section
+    elif '## Progress' in content:
+        content = content[:content.index('## Progress')] + final_section
+    else:
+        content = content + '\n\n' + final_section
 
-
-def write_log(log_path, run_num, config, results, samples):
-    """Write both ledger entry and detail log"""
-    runs_dir = os.path.join(os.path.dirname(log_path), 'runs')
-
-    # 1. Master ledger (one-line summary)
-    write_ledger_entry(log_path, run_num, config, results)
-
-    # 2. Detailed per-run log
-    write_detail_log(runs_dir, run_num, config, results, samples)
-
-    print(f"Run {run_num} logged.")
+    with open(detail_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print(f"Detail log updated: {detail_path}")

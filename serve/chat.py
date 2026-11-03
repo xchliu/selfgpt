@@ -116,7 +116,7 @@ if __name__ == '__main__':
         cfg = ckpt['config']
         encoding = ckpt.get('encoding', 'gpt2')
         if encoding == "sentencepiece":
-            sp_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'zhuge-tan-sp.model')
+            sp_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'mixed-sp.model')
             tokenizer = SimpleTokenizer(encoding="sentencepiece", model_path=sp_path)
         else:
             tokenizer = SimpleTokenizer(encoding=encoding)
