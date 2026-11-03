@@ -1,0 +1,50 @@
+[
+  {"conversations": [
+    {"role": "user", "content": "什么是大模型？"},
+    {"role": "assistant", "content": "大模型就是用海量文本训练出来的语言模型。它不是一个能理解你的程序，而是一个概率机器——给定前文，预测下一个词。参数越大、数据越多，预测越准，看起来就像在思考。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "AI能替代程序员吗？"},
+    {"role": "assistant", "content": "不能完全替代。AI能帮你写代码、补全函数、生成测试，但系统设计、架构决策、需求理解这些判断力层面的工作，AI做不了。AI是工具，不是替代品。真正被替代的，不是程序员，是不会用AI的程序员。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "银行怎么落地AI？"},
+    {"role": "assistant", "content": "银行落地AI不要从大模型开始，从场景开始。先找一个痛点——信贷审批、客服、风控、运营，然后用AI解决它。不要追求技术先进，追求业务效果。最好的落地不是上了什么模型，而是省了多少人、提了多少效。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "什么是注意力机制？"},
+    {"role": "assistant", "content": "注意力机制就是让每个词去看其他所有词，算出谁跟它最相关，然后把相关信息混合起来。就像你读一句话，读到'吃了'的时候，会自动回头看'苹果'——这就是注意力。QKV三套矩阵分别表示'我在找什么'、'我有什么'、'我提供什么信息'。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "训练一个模型需要什么？"},
+    {"role": "assistant", "content": "三样东西：数据、模型、算力。数据决定上限，模型决定怎么学，算力决定学多快。核心循环就五步：取一批数据，前向传播算预测，算loss看错多少，反向传播算梯度，更新参数。重复千万次。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "AI时代什么能力最重要？"},
+    {"role": "assistant", "content": "判断力。信息不再稀缺，AI能给你海量答案，但哪个对、哪个用、哪个信，需要人来判断。AI时代最贵的不是知识，是知道什么该信、什么不该信的能力。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "什么是Token？"},
+    {"role": "assistant", "content": "Token是模型能认识的最小单位。一个英文单词可能是一个token，一个汉字可能是一个或多个token。模型不认识文字，只认识数字，所以要先通过分词器把文字变成token id。词表越大，token越精细，但模型也越大。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "什么是softmax？"},
+    {"role": "assistant", "content": "softmax把一组分数变成概率——加起来等于1。它有三个作用：归一化、放大差异（赢家通吃）、可导（让模型能训练）。没有softmax，attention的梯度没法回传，整个Transformer就训不动。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "手搓GPT难吗？"},
+    {"role": "assistant", "content": "不难。核心代码就几百行：tokenizer把文字变数字，attention让词与词关联，block把零件拼成层，GPT把层堆起来，训练循环反复猜和调。4天就能从零跑通，170K参数从乱码到能说话。手搓一遍，胜读十遍论文。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "RNN有什么问题？"},
+    {"role": "assistant", "content": "RNN有两个致命问题：一是固定向量瓶颈，不管句子多长全部信息压进一个向量，长了就忘；二是串行计算，必须一个词一个词算，没法并行。Transformer用注意力机制解决了这两个问题——每个词直接看所有词，全部并行算。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "为什么需要残差连接？"},
+    {"role": "assistant", "content": "残差连接是给梯度开高速公路。深层网络反向传播时梯度逐层缩小，到第一层几乎为零，模型训不动。加了残差连接，梯度可以走加法这条路直接流回去，哪怕某一层学不到东西，原始信息也能原样传过去。"}
+  ]},
+  {"conversations": [
+    {"role": "user", "content": "数据清洗重要吗？"},
+    {"role": "assistant", "content": "非常重要。我们实验过——同样的模型和分词器，清洗前loss 4.52，清洗后loss 0.80。去掉MEDIA引用、HTML标签、frontmatter这些噪声，模型学到的全是干净的语言规律。数据质量是天花板，模型架构只是够不够得着天花板。"}
+  ]}
+]

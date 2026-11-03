@@ -110,7 +110,7 @@ if __name__ == '__main__':
     tokenizer = SimpleTokenizer()
 
     # load trained model if available, else random init
-    ckpt_path = os.path.join(os.path.dirname(__file__), '..', 'checkpoints', 'model.pt')
+    ckpt_path = os.path.join(os.path.dirname(__file__), '..', 'checkpoints', 'model-sft.pt')
     if os.path.exists(ckpt_path):
         ckpt = torch.load(ckpt_path, weights_only=False, map_location='cpu')
         cfg = ckpt['config']
