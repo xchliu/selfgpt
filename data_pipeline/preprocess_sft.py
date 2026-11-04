@@ -52,7 +52,7 @@ def is_quality(conv):
     return True
 
 
-def preprocess_sft_jsonl(input_path, output_path, max_samples=3000):
+def preprocess_sft_jsonl(input_path, output_path, max_samples=8000):
     """Process large SFT JSONL into clean subset"""
     processed = 0
     skipped_quality = 0
@@ -132,4 +132,4 @@ if __name__ == '__main__':
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     input_path = os.path.join(base, 'data', 'sft', 'sft_t2t_mini.jsonl')
     output_path = os.path.join(base, 'data', 'sft', 'sft-final.json')
-    preprocess_sft_jsonl(input_path, output_path, max_samples=3000)
+    preprocess_sft_jsonl(input_path, output_path, max_samples=8000)

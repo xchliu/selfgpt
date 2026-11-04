@@ -42,14 +42,14 @@ from train.log_utils import get_run_number, start_log, update_progress, finish_l
 
 SFT_CONFIG = {
     "type": "sft",
-    "sft_data": "data/sft/sft-final.json",
+    "sft_data": "data/sft/sft-clean.json",
     "sp_model": "data/mixed-sp.model",
     "embed_dim": 512,
     "num_heads": 4,
     "head_size": 64,
     "num_layers": 12,
     "block_size": 128,
-    "epochs": 8000,
+    "epochs": 6000,
     "batch_size": 4,
     "lr": 1e-4,
     "eval_interval": 50,
