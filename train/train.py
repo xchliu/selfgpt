@@ -32,14 +32,14 @@ from model.gpt import GPT
 CONFIG = {
     "type": "pretrain",
     "data_path": "data/mixed-corpus.txt",
-    "embed_dim": 512,
+    "embed_dim": 768,
     "num_heads": 4,
-    "head_size": 64,
-    "num_layers": 12,
+    "head_size": 96,
+    "num_layers": 16,
     "block_size": 128,
     "epochs": 10000,
     "batch_size": 32,
-    "lr": 1e-3,
+    "lr": 3e-4,
     "eval_interval": 10,
     "encoding": "sentencepiece",  # "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
     "vocab_size": 16000,
