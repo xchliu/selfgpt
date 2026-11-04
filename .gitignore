@@ -6,3 +6,5 @@ records/
 checkpoints/
 .DS_Storedata/pretrain_t2t_mini.jsonl
 data/*.jsonl
+data/sft/sft_t2t_mini.jsonl
+data/sft/sft-final.json

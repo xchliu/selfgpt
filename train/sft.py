@@ -35,21 +35,21 @@ from model.tokenizer import Tokenizer
 from model.gpt import GPT
 
 # import logging functions
-from train.log_utils import get_run_number, write_log
+from train.log_utils import get_run_number, start_log, update_progress, finish_log
 
 
 # --- SFT Config ---
 
 SFT_CONFIG = {
     "type": "sft",
-    "sft_data": "data/sft/sft-auto.json",
+    "sft_data": "data/sft/sft-final.json",
     "sp_model": "data/mixed-sp.model",
     "embed_dim": 512,
     "num_heads": 4,
     "head_size": 64,
     "num_layers": 12,
     "block_size": 128,
-    "epochs": 1000,
+    "epochs": 8000,
     "batch_size": 4,
     "lr": 1e-4,
     "eval_interval": 50,
@@ -275,6 +275,25 @@ if __name__ == '__main__':
     params = sum(p.numel() for p in model.parameters())
     print(f"Params: {params:,}")
 
+    # 3.5 phase 1: start log
+    device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+    log_path = os.path.join(base, 'logs', 'training-log.md')
+    os.makedirs(os.path.join(base, 'logs'), exist_ok=True)
+    run_num = get_run_number(log_path)
+    init_results = {
+        'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'device': device,
+        'corpus_chars': sum(len(ids) for ids, _ in samples),
+        'corpus_tokens': sum(len(ids) for ids, _ in samples),
+        'params': params,
+        'elapsed': 0,
+        'initial_loss': 0,
+        'final_loss': 0,
+        'final_eval_loss': 0,
+    }
+    sft_config_for_start = {**SFT_CONFIG, 'data_path': SFT_CONFIG['sft_data'], 'goal': 'SFT: learn dialogue format'}
+    detail_path = start_log(log_path, run_num, sft_config_for_start, init_results)
+
     # 4. SFT train
     print("\nSFT training...\n")
     start = time.time()
@@ -365,5 +384,5 @@ if __name__ == '__main__':
         'loss_curve': '\n'.join(loss_curve_lines),
     }
 
-    run_num = get_run_number(log_path)
-    write_log(log_path, run_num, sft_config_for_log, results, samples_text.strip())
+    sft_config_for_log = {**SFT_CONFIG, 'data_path': SFT_CONFIG['sft_data'], 'goal': 'SFT: learn dialogue format'}
+    finish_log(log_path, run_num, sft_config_for_log, results, samples_text.strip(), detail_path)

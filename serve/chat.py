@@ -38,7 +38,9 @@ class ChatSession:
 
     def chat(self, user_input):
         """Send a message, get model reply"""
-        # 1. store user message
+        # 1. store user message (ensure it ends with ? or ？)
+        if not user_input.rstrip().endswith(('？', '?', '。', '.', '!', '！')):
+            user_input = user_input.rstrip() + '？'
         self.history.append(("user", user_input))
 
         # 2. build prompt -> encode -> token ids
