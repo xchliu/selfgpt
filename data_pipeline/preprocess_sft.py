@@ -1,7 +1,7 @@
 """
 Preprocess SFT JSONL corpus: filter, sample, merge with existing Q&A.
 
-Input: data/sft/sft_t2t_mini.jsonl (905K conversations)
+Input: data/raw/sft_t2t_mini.jsonl (905K conversations)
 Output: data/sft/sft-final.json (merged SFT data)
 
 Steps:
@@ -130,6 +130,6 @@ def preprocess_sft_jsonl(input_path, output_path, max_samples=8000):
 
 if __name__ == '__main__':
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    input_path = os.path.join(base, 'data', 'sft', 'sft_t2t_mini.jsonl')
+    input_path = os.path.join(base, 'data', 'raw', 'sft_t2t_mini.jsonl')
     output_path = os.path.join(base, 'data', 'sft', 'sft-final.json')
     preprocess_sft_jsonl(input_path, output_path, max_samples=8000)

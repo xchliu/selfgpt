@@ -168,7 +168,7 @@ def process_corpus(input_dir, output_path, min_length=200):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Clean corpus for training')
     parser.add_argument('--input', required=True, help='input directory with .md files')
-    parser.add_argument('--output', default='data/clean-corpus.txt', help='output file path')
+    parser.add_argument('--output', default='data/corpus/clean-corpus.txt', help='output file path')
     parser.add_argument('--min_length', type=int, default=200, help='min article length')
     args = parser.parse_args()
 

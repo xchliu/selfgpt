@@ -1,10 +1,16 @@
 venv/
 __pycache__/
 *.pyc
-data/*.txt
 records/
 checkpoints/
-.DS_Storedata/pretrain_t2t_mini.jsonl
-data/*.jsonl
-data/sft/sft_t2t_mini.jsonl
+.DS_Store
+
+# Raw data (too large for git)
+data/raw/
+
+# Large corpus files
+data/corpus/*.txt
+
+# SFT intermediate data
 data/sft/sft-final.json
+data/sft/sft-auto.json

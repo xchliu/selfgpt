@@ -67,7 +67,7 @@ def train_tokenizer(corpus_path, vocab_size=16000, model_prefix=None, character_
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train SentencePiece tokenizer')
-    parser.add_argument('--corpus', default='data/zhuge-tan.txt', help='corpus path')
+    parser.add_argument('--corpus', default='data/corpus/clean-corpus.txt', help='corpus path')
     parser.add_argument('--vocab_size', type=int, default=16000, help='target vocab size')
     parser.add_argument('--prefix', default=None, help='output prefix (default: corpus-sp)')
     args = parser.parse_args()

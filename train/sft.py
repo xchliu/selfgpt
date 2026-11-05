@@ -43,7 +43,7 @@ from train.log_utils import get_run_number, start_log, update_progress, finish_l
 SFT_CONFIG = {
     "type": "sft",
     "sft_data": "data/sft/sft-clean.json",
-    "sp_model": "data/mixed-sp.model",
+    "sp_model": "data/tokenizer/mixed-sp.model",
     "embed_dim": 768,
     "num_heads": 4,
     "head_size": 96,

@@ -146,8 +146,8 @@ def preprocess_jsonl(input_path, output_path, max_chars=5000000, min_length=50):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Preprocess JSONL corpus v2')
-    parser.add_argument('--input', default='data/pretrain_t2t_mini.jsonl')
-    parser.add_argument('--output', default='data/pretrain-clean.txt')
+    parser.add_argument('--input', default='data/raw/pretrain_t2t_mini.jsonl')
+    parser.add_argument('--output', default='data/corpus/pretrain-clean.txt')
     parser.add_argument('--max_chars', type=int, default=5000000)
     parser.add_argument('--min_length', type=int, default=50)
     args = parser.parse_args()

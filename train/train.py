@@ -31,7 +31,7 @@ from model.gpt import GPT
 
 CONFIG = {
     "type": "pretrain",
-    "data_path": "data/mixed-corpus.txt",
+    "data_path": "data/corpus/mixed-corpus.txt",
     "embed_dim": 768,
     "num_heads": 4,
     "head_size": 96,
@@ -43,7 +43,7 @@ CONFIG = {
     "eval_interval": 10,
     "encoding": "sentencepiece",  # "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
     "vocab_size": 16000,
-    "sp_model_path": "data/mixed-sp.model",
+    "sp_model_path": "data/tokenizer/mixed-sp.model",
     "sample_prompts": ["AI时代", "我们", "银行"],
 }
 
@@ -61,7 +61,7 @@ def load_data(data_path, encoding="cl100k_base"):
         vocab_path = os.path.join(base, 'data', 'vocab.txt')
         tokenizer = Tokenizer("char", vocab_path=vocab_path)
     elif encoding == "sentencepiece":
-        model_path = os.path.join(base, CONFIG.get('sp_model_path', 'data/zhuge-tan-sp.model'))
+        model_path = os.path.join(base, CONFIG.get('sp_model_path', 'data/tokenizer/mixed-sp.model'))
         tokenizer = Tokenizer("sentencepiece", model_path=model_path)
     else:
         tokenizer = Tokenizer(encoding)
