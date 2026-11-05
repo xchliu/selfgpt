@@ -54,7 +54,48 @@
 - [ ] 模型版本管理（不同配方存不同 model.pt）
 - [ ] README 更新（新架构、新分词器、新流程）
 
-## 9. 内容
+## 10. 待研究理论/技术点
+
+### 注意力
+- [ ] 实现真正的多头注意力（当前4个head各96维，但没拆开跑）
+- [ ] 对比单头 vs 多头效果（多头应能学到不同模式：语法/语义/共指）
+- [ ] Flash Attention：减少 HBM 读写，提速训练
+- [ ] KV Cache：推理时不重复计算前文，加速生成
+
+### 位置编码
+- [ ] RoPE（旋转位置编码）：支持更长上下文，不限于固定 block_size
+- [ ] ALiBi：外推性好，训练时没见过的长度也能处理
+- [ ] 对比可学习位置编码 vs RoPE vs ALiBi 的效果
+
+### 训练优化
+- [ ] Warmup：前 N 步 lr 从 0 线性升到目标值，防止初始梯度爆炸
+- [ ] Cosine decay：训练后期逐渐降低 lr，精细收敛
+- [ ] 梯度裁剪（gradient clipping）：防止梯度爆炸的另一种手段
+- [ ] 梯度累积：小显存模拟大 batch_size
+- [ ] Dropout：在 attention 和 feedforward 中加 dropout 防过拟合
+- [ ] 训练/验证集分离（当前全部用于训练）
+- [ ] 早停机制（eval loss 连续 N 轮不降就停）
+
+### 损失与评估
+- [ ] Perplexity（困惑度）：比 loss 更直观的评估指标
+- [ ] 困惑度 = exp(loss)，表示模型对正确 token 的"困惑程度"
+- [ ] 训练曲线分析：loss 震荡说明什么？curve 形状如何判断健康度
+
+### 激活函数对比
+- [ ] GELU vs ReLU vs SwiGLU 实验对比
+- [ ] SwiGLU：Llama 用的，FeedForward 的变体
+- [ ] 为什么现代大模型从 GELU 转向 SwiGLU
+
+### 架构演进
+- [ ] 当前是 pre-norm decoder-only GPT，对比其他架构
+- [ ] Mamba / SSM：替代 attention 的新架构
+- [ ] MoE（混合专家）：稀疏激活，大模型用
+- [ ] 分组查询注意力（GQA）：Llama 2 用的
+
+### 分词
+- [ ] BPE 合并算法的完整实现（当前直接用 SentencePiece）
+- [ ] 词表大小对训练的影响（16K vs 32K）
+- [ ] 子词分割对中文的影响（单字 vs 词组）
 - [ ] 公众号草稿箱：补全标题、删旧草稿、检查排版
 - [ ] 系列文章规划（分词器篇、训练篇、数据加工篇）
 - [ ] 训练日志分析文章
