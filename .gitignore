@@ -5,12 +5,5 @@ records/
 checkpoints/
 .DS_Store
 
-# Raw data (too large for git)
-data/raw/
-
-# Large corpus files
-data/corpus/*.txt
-
-# SFT intermediate data
-data/sft/sft-final.json
-data/sft/sft-auto.json
+# Data files (all data excluded from git)
+data/
