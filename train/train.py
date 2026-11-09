@@ -31,19 +31,19 @@ from model.gpt import GPT
 
 CONFIG = {
     "type": "pretrain",
-    "data_path": "data/corpus/mixed-corpus.txt",
+    "data_path": "data/corpus/wiki-mixed.txt",
     "embed_dim": 768,
     "num_heads": 4,
     "head_size": 96,
     "num_layers": 16,
     "block_size": 128,
-    "epochs": 10000,
+    "epochs": 30000,
     "batch_size": 32,
     "lr": 3e-4,
     "eval_interval": 10,
     "encoding": "sentencepiece",  # "char" | "gpt2" | "cl100k_base" | "o200k_base" | "sentencepiece"
     "vocab_size": 16000,
-    "sp_model_path": "data/tokenizer/mixed-sp.model",
+    "sp_model_path": "data/tokenizer/wiki-sp.model",
     "sample_prompts": ["AI时代", "我们", "银行"],
 }
 
