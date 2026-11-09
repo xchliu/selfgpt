@@ -144,7 +144,7 @@ if __name__ == '__main__':
         )
         print("model.pt not found, using random model (output will be gibberish)")
 
-    session = ChatSession(model, tokenizer, block_size=128, temperature=0.8, top_k=10)
+    session = ChatSession(model, tokenizer, block_size=128, temperature=0.6, top_k=5)
 
     print("=" * 50)
     print("  SelfGPT Chat")
