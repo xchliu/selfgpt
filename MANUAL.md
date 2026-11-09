@@ -1,6 +1,6 @@
 # SelfGPT — 从零手搓 GPT 操作手册
 
-> 4 天，从零到一个能训练、能生成、能对话的 GPT。
+> 10 天，从零到一个能训练、能生成、能对话的 105M GPT。
 > 每一步：**写什么 → 为什么这么写 → 怎么验证**。
 
 ---
@@ -23,7 +23,7 @@ cd selfgpt
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python src/train.py
+python train/train.py
 ```
 
 ---
@@ -34,29 +34,58 @@ python src/train.py
 selfgpt/
 ├── MANUAL.md           # 本文件 — 操作手册
 ├── README.md           # 项目简介（GitHub 用）
-├── requirements.txt    # 依赖：torch + numpy
+├── TODO.md             # 路线图（10方向 50+项）
+├── requirements.txt    # 依赖：torch + numpy + tiktoken + sentencepiece
 ├── .gitignore
-├── src/                # 源代码
-│   ├── tokenizer.py    # 字符级 tokenizer（文件加载词表）
+│
+├── model/              # 模型定义（train 和 serve 共用）
+│   ├── tokenizer.py    # 统一分词器（char / tiktoken / sentencepiece 三后端）
 │   ├── attention.py    # SingleHeadAttention（QKV + mask + proj）
 │   ├── block.py        # TransformerBlock（FF + LayerNorm + 残差）
-│   ├── gpt.py          # 完整 GPT（Embedding + Position + N×Block + LM Head）
-│   ├── train.py        # 训练循环（forward → loss → backward → step）
+│   └── gpt.py          # 完整 GPT（Embedding + Position + N×Block + LM Head）
+│
+├── train/              # 训练
+│   ├── train.py        # 预训练循环（105M, lr=3e-4）
+│   ├── sft.py          # SFT 微调（loss mask，只对回答算 loss）
+│   ├── train_tokenizer.py  # SentencePiece 分词器训练
+│   └── log_utils.py    # 三阶段日志（start → progress → finish）
+│
+├── serve/              # 推理
 │   ├── generate.py     # 自回归生成（temperature + top_k）
-│   └── chat.py         # 多轮对话封装
-├── tests/              # 测试
-│   ├── test_attention.py
-│   └── test_generate.py
-├── data/               # 数据
-│   ├── vocab.txt       # 字符词表（127 字符）
-│   ├── train.txt       # 训练语料（莎士比亚片段）
-│   └── model.pt        # 训练好的模型 checkpoint
-├── records/            # 过程记录（已 gitignore，文章素材用）
-│   ├── 01-kickoff.md
-│   ├── 02-phase1-tokenizer.md
-│   ├── ...
-│   └── 11-selfgpt-summary.md
-└── ref/                # 参考资料（论文、教程链接）
+│   └── chat.py         # 多轮对话
+│
+├── data_pipeline/     # 数据处理
+│   ├── process.py          # 清洗 markdown 文章 → 训练语料
+│   ├── extract_wikipedia.py # 从维基百科 JSON 提取纯文本
+│   ├── preprocess_pretrain.py # 清洗 JSONL 基础语料
+│   ├── gen_sft.py          # 从文章自动生成问答对（13种策略）
+│   ├── preprocess_sft.py   # 从外部语料提取对话
+│   └── clean_sft.py        # SFT 数据质量清洗
+│
+├── data/               # 数据（不进 git）
+│   ├── raw/               # 原始下载
+│   ├── corpus/            # 预训练语料
+│   ├── sft/                # SFT 数据
+│   ├── tokenizer/         # SP 模型
+│   └── archive/           # 历史归档
+│
+├── docs/              # 文档
+│   ├── model-theory.md     # 10 个组件的原理、为什么选它、实验关联
+│   ├── data-recipe.md      # 数据配方 + 历史对比
+│   ├── data-pipeline.md    # 数据处理流程
+│   ├── data-structure.md   # 目录说明
+│   └── training-log.md     # 日志机制
+│
+├── checkpoints/       # 模型权重（不进 git）
+│   ├── model.pt            # 预训练模型
+│   └── model-sft.pt       # SFT 模型
+│
+├── logs/              # 训练日志
+│   ├── training-log.md     # 总台账（13轮）
+│   └── runs/               # 每轮详细
+│
+├── tests/             # 测试
+└── ref/               # 参考资料（论文、教程链接）
 ```
 
 ---
@@ -427,25 +456,30 @@ python chat.py
 
 六个阶段走完，你手搓了一个完整的 GPT。接下来 1→10 的方向：
 
-| 方向 | 做什么 | 预期效果 |
-|------|--------|---------|
-| 更大语料 | 莎士比亚全集 / TinyStories | 生成更通顺 |
-| 更多训练 | 1000+ 轮 | loss 再降 |
-| BPE 分词器 | 替字符级，token 效率翻倍 | 更快更准 |
-| 多头注意力 | 替单头，多角度关注 | 表达能力提升 |
-| 更大模型 | embed_dim=256+, layers=8+ | 接近真 GPT |
-| RoPE 位置编码 | 替学习式位置编码 | 更好的长文本能力 |
-| 微调 | 自己的博客/公众号文章 | 个性化模型 |
+| 方向 | 做什么 | 预期效果 | 状态 |
+|------|--------|---------|------|
+| ✅ 维基语料 | 中文维基百科 1000万字符 | 语法通顺有知识感 | 已完成 |
+| ✅ SentencePiece | BPE 分词器 16K 词表 | 中文 token 效率提升 | 已完成 |
+| ✅ SFT | 4332条问答对微调 | 能对话回答问题 | 已完成 |
+| ✅ 105M参数 | embed_dim=768, 16层 | 更强的表达能力 | 已完成 |
+| 多头注意力 | 替单头，多角度关注 | 表达能力提升 | TODO |
+| RoPE位置编码 | 替学习式位置编码 | 更好的长文本能力 | TODO |
+| Warmup+Cosine | 学习率调度 | 训练更稳定 | TODO |
+| KV Cache | 推理优化 | 生成加速 | TODO |
+| 更大SFT数据 | 用大模型生成高质量问答 | 理解能力提升 | TODO |
+| RLHF/DPO | 人类偏好对齐 | 说好话 | TODO |
 
 ---
 
 ## 参考资料
 
 详见 `ref/README.md`，包括：
-- 核心论文（Attention Is All You Need, GPT-2）
+- 核心论文（Attention Is All You Need, GPT-2, GELU, LayerNorm, ResNet, AdamW, SentencePiece）
+- 待读论文（RoPE, Flash Attention, SwiGLU, GQA, Dropout, InstructGPT）
 - 代码参考（nanoGPT, minGPT, llm.c）
 - 视频教程（Karpathy 系列）
 - 图解文章（Illustrated Transformer 等）
+- 理论文档：`docs/model-theory.md`（10个组件的原理、为什么选它、实验关联）
 
 ---
 
@@ -485,4 +519,4 @@ python chat.py
 
 ---
 
-开始吧，从 `src/tokenizer.py` 下手。
+开始吧，从 `model/tokenizer.py` 下手。
