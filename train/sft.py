@@ -49,7 +49,7 @@ SFT_CONFIG = {
     "head_size": 96,
     "num_layers": 16,
     "block_size": 128,
-    "epochs": 3000,
+    "epochs": 1600,
     "batch_size": 4,
     "lr": 1e-4,
     "eval_interval": 50,
@@ -60,47 +60,28 @@ SFT_CONFIG = {
 
 # --- Data Preparation ---
 
-def load_sft_data(data_path, tokenizer):
+def load_sft_data(data_path, tokenizer, block_size=128, val_ratio=0.05):
     """
     Load SFT data, convert to token ids with loss mask.
 
-    Returns list of (input_ids, loss_mask) pairs.
-    loss_mask[i] = 1 if token i should contribute to loss, 0 otherwise.
+    Loss mask covers assistant content AND closing tag </assistant>,
+    so the model learns when to stop generating.
+
+    Samples longer than block_size are skipped (not truncated).
+    Returns: (train_samples, val_samples)
     """
     with open(data_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    samples = []
+    all_samples = []
+    skipped = 0
+
     for item in data:
         convs = item['conversations']
-        full_text = ""
-        mask_regions = []  # (start, end) ranges where loss should be computed
-
-        for conv in convs:
-            role = conv['role']
-            content = conv['content']
-            tag_open = f"<{role}>"
-            tag_close = f"</{role}>"
-
-            if role == "assistant":
-                # Mark this region for loss
-                start = len(full_text)
-                full_text += tag_open + content + tag_close
-                end = len(full_text)
-                mask_regions.append((start, end))
-            else:
-                full_text += tag_open + content + tag_close
-
-        # Encode full text
-        token_ids = tokenizer.encode(full_text)
-
-        # Build loss mask (char-level -> token-level approximation)
-        # Simple approach: re-encode each part separately to find boundaries
-        loss_mask = [0] * len(token_ids)
-
-        # Rebuild token boundaries by encoding incrementally
         prefix = ""
-        token_offset = 0
+        ids_all = []
+        loss_mask_all = []
+
         for conv in convs:
             role = conv['role']
             content = conv['content']
@@ -108,23 +89,55 @@ def load_sft_data(data_path, tokenizer):
             tag_close = f"</{role}>"
 
             if role == "assistant":
-                # Encode prefix (before assistant content)
-                prefix_tokens = len(tokenizer.encode(prefix + tag_open))
-                content_tokens = len(tokenizer.encode(prefix + tag_open + content))
-                for i in range(prefix_tokens, content_tokens):
-                    if i < len(loss_mask):
-                        loss_mask[i] = 1
+                # Loss region: content + closing tag (learn to stop)
+                prefix_ids = tokenizer.encode(prefix + tag_open)
+                content_ids = tokenizer.encode(prefix + tag_open + content)
+                full_ids = tokenizer.encode(prefix + tag_open + content + tag_close)
+
+                loss_start = len(prefix_ids)
+                loss_end = len(full_ids)
+
+                # Extend ids_all
+                new_ids = full_ids[len(ids_all):]
+                ids_all.extend(new_ids)
+
+                # Rebuild loss_mask_all to match ids_all length
+                while len(loss_mask_all) < len(ids_all):
+                    loss_mask_all.append(0)
+                for i in range(loss_start, min(loss_end, len(ids_all))):
+                    loss_mask_all[i] = 1
+            else:
+                new_ids = tokenizer.encode(prefix + tag_open + content + tag_close)
+                extend_by = len(new_ids) - len(ids_all)
+                ids_all.extend(new_ids[len(ids_all):])
+                loss_mask_all.extend([0] * extend_by)
 
             prefix += tag_open + content + tag_close
 
-        samples.append((token_ids, loss_mask))
+        # Skip samples longer than block_size
+        if len(ids_all) > block_size:
+            skipped += 1
+            continue
 
-    print(f"SFT samples: {len(samples)}")
-    total_tokens = sum(len(ids) for ids, _ in samples)
-    total_masked = sum(sum(m) for _, m in samples)
-    print(f"Total tokens: {total_tokens}, masked (loss): {total_masked}")
+        all_samples.append((ids_all, loss_mask_all))
 
-    return samples
+    print(f"SFT samples: {len(all_samples)} (skipped {skipped} for exceeding {block_size} tokens)")
+
+    # Split into train/val
+    import random
+    random.seed(42)
+    random.shuffle(all_samples)
+    val_size = max(50, int(len(all_samples) * val_ratio))
+    val_samples = all_samples[:val_size]
+    train_samples = all_samples[val_size:]
+
+    print(f"Train: {len(train_samples)}, Val: {len(val_samples)}")
+
+    total_tokens = sum(len(ids) for ids, _ in train_samples)
+    total_masked = sum(sum(m) for _, m in train_samples)
+    print(f"Train tokens: {total_tokens}, masked (loss): {total_masked}")
+
+    return train_samples, val_samples
 
 
 def get_sft_batch(samples, batch_size, block_size, tokenizer):
@@ -144,7 +157,7 @@ def get_sft_batch(samples, batch_size, block_size, tokenizer):
     mask = torch.zeros(B, T, dtype=torch.float)
 
     for i in range(B):
-        ids, loss_mask = samples[torch.randint(len(samples), (1,)).item()]
+        ids, loss_mask = train_samples[torch.randint(len(train_samples), (1,)).item()]
 
         # Truncate or pad to block_size
         if len(ids) > T:
@@ -166,11 +179,11 @@ def get_sft_batch(samples, batch_size, block_size, tokenizer):
 
 # --- SFT Training ---
 
-def sft_train(model, samples, tokenizer, epochs, batch_size, block_size, lr, eval_interval):
+def sft_train(model, train_samples, val_samples, tokenizer, epochs, batch_size, block_size, lr, eval_interval):
     """
     SFT training loop.
-
-    Key difference from pre-training: only compute loss on assistant tokens.
+    Only compute loss on assistant tokens (including closing tag).
+    Evaluates on held-out validation set.
     """
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
@@ -179,10 +192,11 @@ def sft_train(model, samples, tokenizer, epochs, batch_size, block_size, lr, eva
     print(f"Device: {device}")
 
     losses = []
+    recent_train_losses = []
 
     for epoch in range(epochs):
         # 1. get batch
-        x, mask = get_sft_batch(samples, batch_size, block_size, tokenizer)
+        x, mask = get_sft_batch(train_samples, batch_size, block_size, tokenizer)
         x = x.to(device)
         mask = mask.to(device)
 
@@ -190,28 +204,19 @@ def sft_train(model, samples, tokenizer, epochs, batch_size, block_size, lr, eva
         logits = model(x)  # (B, T, vocab_size)
 
         # 3. compute masked loss
-        # Target = input shifted by 1
-        # Only compute loss where mask = 1
         B, T, C = logits.shape
-
-        # Shift: predict token i+1 from token i
-        # loss_mask[i] = 1 means we care about predicting token i+1
-        # So we shift logits and mask accordingly
         shift_logits = logits[:, :-1, :]  # (B, T-1, C)
         shift_targets = x[:, 1:]           # (B, T-1)
-        shift_mask = mask[:, 1:]           # (B, T-1) - mask for the target token
+        shift_mask = mask[:, 1:]           # (B, T-1)
 
-        # Flatten
         flat_logits = shift_logits.reshape(-1, C)
         flat_targets = shift_targets.reshape(-1)
         flat_mask = shift_mask.reshape(-1)
 
-        # Compute per-token loss
         loss_per_token = nn.functional.cross_entropy(
             flat_logits, flat_targets, reduction='none'
         )
 
-        # Apply mask: only assistant tokens contribute
         if flat_mask.sum() > 0:
             loss = (loss_per_token * flat_mask).sum() / flat_mask.sum()
         else:
@@ -224,10 +229,52 @@ def sft_train(model, samples, tokenizer, epochs, batch_size, block_size, lr, eva
         # 5. step
         optimizer.step()
 
-        # 6. log
+        # 6. track recent losses for averaging
+        recent_train_losses.append(loss.item())
+        if len(recent_train_losses) > 50:
+            recent_train_losses.pop(0)
+
+        # 7. log + periodic eval on validation set
         if epoch % eval_interval == 0 or epoch == epochs - 1:
-            losses.append((epoch, loss.item()))
-            print(f"step {epoch:4d}/{epochs} | sft loss: {loss.item():.4f}")
+            avg_train_loss = sum(recent_train_losses) / len(recent_train_losses)
+
+            # Evaluate on entire validation set
+            model.eval()
+            with torch.no_grad():
+                val_losses = []
+                for j in range(0, len(val_samples), batch_size):
+                    batch = val_samples[j:j+batch_size]
+                    vx = torch.zeros(len(batch), block_size, dtype=torch.long)
+                    vm = torch.zeros(len(batch), block_size, dtype=torch.float)
+                    for k, (vids, vloss_mask) in enumerate(batch):
+                        if len(vids) > block_size:
+                            vids = vids[:block_size]
+                            vloss_mask = vloss_mask[:block_size]
+                        pad_len = block_size - len(vids)
+                        vx[k] = torch.tensor(vids + [0]*pad_len, dtype=torch.long)
+                        vm[k] = torch.tensor(vloss_mask + [0]*pad_len, dtype=torch.float)
+                    vx = vx.to(device)
+                    vm = vm.to(device)
+                    vlogits = model(vx)
+                    vB, vT, vC = vlogits.shape
+                    vshift_logits = vlogits[:, :-1, :]
+                    vshift_targets = vx[:, 1:]
+                    vshift_mask = vm[:, 1:]
+
+                    vflat_logits = vshift_logits.reshape(-1, vC)
+                    vflat_targets = vshift_targets.reshape(-1)
+                    vflat_mask = vshift_mask.reshape(-1)
+
+                    vloss_per_token = nn.functional.cross_entropy(
+                        vflat_logits, vflat_targets, reduction='none'
+                    )
+                    if vflat_mask.sum() > 0:
+                        val_losses.append(((vloss_per_token * vflat_mask).sum() / vflat_mask.sum()).item())
+
+            val_loss = sum(val_losses) / len(val_losses) if val_losses else 0
+            losses.append((epoch, avg_train_loss, val_loss))
+            print(f"step {epoch:4d}/{epochs} | train: {avg_train_loss:.4f} | val: {val_loss:.4f}")
+            model.train()
 
     return losses
 
@@ -242,9 +289,9 @@ if __name__ == '__main__':
     tokenizer = Tokenizer("sentencepiece", model_path=sp_model_path)
     print(f"Tokenizer: {tokenizer.vocab_size} vocab")
 
-    # 2. load SFT data
+    # 2. load SFT data (with train/val split)
     sft_data_path = os.path.join(base, SFT_CONFIG['sft_data'])
-    samples = load_sft_data(sft_data_path, tokenizer)
+    train_samples, val_samples = load_sft_data(sft_data_path, tokenizer, block_size=SFT_CONFIG['block_size'])
 
     # 3. load pre-trained model
     ckpt_path = os.path.join(base, 'checkpoints', 'model.pt')
@@ -283,8 +330,8 @@ if __name__ == '__main__':
     init_results = {
         'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'device': device,
-        'corpus_chars': sum(len(ids) for ids, _ in samples),
-        'corpus_tokens': sum(len(ids) for ids, _ in samples),
+        'corpus_chars': sum(len(ids) for ids, _ in train_samples),
+        'corpus_tokens': sum(len(ids) for ids, _ in train_samples),
         'params': params,
         'elapsed': 0,
         'initial_loss': 0,
@@ -297,7 +344,7 @@ if __name__ == '__main__':
     # 4. SFT train
     print("\nSFT training...\n")
     start = time.time()
-    losses = sft_train(model, samples, tokenizer,
+    losses = sft_train(model, train_samples, val_samples, tokenizer,
                        epochs=SFT_CONFIG['epochs'],
                        batch_size=SFT_CONFIG['batch_size'],
                        block_size=SFT_CONFIG['block_size'],
@@ -305,7 +352,7 @@ if __name__ == '__main__':
                        eval_interval=SFT_CONFIG['eval_interval'])
     elapsed = time.time() - start
     print(f"\nDone in {elapsed:.1f}s")
-    print(f"SFT loss: {losses[0][1]:.4f} -> {losses[-1][1]:.4f}")
+    print(f"SFT loss: {losses[0][1]:.4f} -> {losses[-1][1]:.4f} (val: {losses[-1][2]:.4f})")
 
     # 5. save SFT model
     sft_ckpt_path = os.path.join(base, 'checkpoints', 'model-sft.pt')
@@ -357,11 +404,11 @@ if __name__ == '__main__':
     loss_curve_lines = []
     step = max(1, len(losses) // 10)
     for i in range(0, len(losses), step):
-        ep, tl = losses[i]
-        loss_curve_lines.append(f"step {ep:5d}: sft_loss={tl:.4f}")
+        ep, tl, vl = losses[i]
+        loss_curve_lines.append(f"step {ep:5d}: train={tl:.4f} val={vl:.4f}")
     if losses:
-        ep, tl = losses[-1]
-        last_line = f"step {ep:5d}: sft_loss={tl:.4f}"
+        ep, tl, vl = losses[-1]
+        last_line = f"step {ep:5d}: train={tl:.4f} val={losses[-1][2]:.4f}"
         if last_line not in loss_curve_lines:
             loss_curve_lines.append(last_line)
 
@@ -374,8 +421,8 @@ if __name__ == '__main__':
     results = {
         'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'device': 'mps' if torch.backends.mps.is_available() else 'cpu',
-        'corpus_chars': sum(len(ids) for ids, _ in samples),
-        'corpus_tokens': sum(len(ids) for ids, _ in samples),
+        'corpus_chars': sum(len(ids) for ids, _ in train_samples),
+        'corpus_tokens': sum(len(ids) for ids, _ in train_samples),
         'params': params,
         'elapsed': elapsed,
         'initial_loss': losses[0][1],
